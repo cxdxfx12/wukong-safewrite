@@ -1,0 +1,62 @@
+# Build directories
+build/*
+!build/WukongFreight.app
+build_test/
+build-*/
+build_macos/
+cmake-build-*/
+QXlsx_build/
+
+# Qt build files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+
+# Compiled Object files
+*.o
+*.obj
+*.a
+*.lib
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Executables
+*.exe
+*.out
+*.app
+# 例外：保留打包好的 .app
+!build/WukongFreight.app
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data files
+*.xlsx
+*.json
+
+# Package outputs
+*.zip
+package/
+Package/
+__pycache__/
