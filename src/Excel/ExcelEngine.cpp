@@ -259,7 +259,7 @@ QList<OrderData> ExcelEngine::readExcel(const QString &filePath, const QMap<QStr
             dataRowCount++;
 
             if (dataRowCount % progressInterval == 0) {
-                int percent = estRows > 0 ? (dataRowCount * 100 / estRows) : (dataRowCount / 100);
+                int percent = estRows > 0 ? qMin(99, dataRowCount * 100 / estRows) : qMin(99, dataRowCount / 100);
                 emit progressUpdated(percent);
             }
         };

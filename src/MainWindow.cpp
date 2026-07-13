@@ -938,7 +938,7 @@ void MainWindow::importFilesAsync(const QStringList &filePaths, bool useExisting
                                 int globalDone = sharedProcessedRows->loadAcquire() + localDone;
                                 int tot = sharedTotalRows->loadAcquire();
                                 if (tot > 0) {
-                                    int pct = static_cast<int>(globalDone * 100.0 / tot);
+                                    int pct = qMin(99, static_cast<int>(globalDone * 100.0 / tot));
                                     int prev = sharedMaxProgress->loadAcquire();
                                     while (pct > prev && !sharedMaxProgress->testAndSetOrdered(prev, pct))
                                         prev = sharedMaxProgress->loadAcquire();
@@ -955,7 +955,7 @@ void MainWindow::importFilesAsync(const QStringList &filePaths, bool useExisting
                         int done = sharedProcessedRows->loadAcquire();
                         int tot = sharedTotalRows->loadAcquire();
                         if (tot > 0) {
-                            int pct = static_cast<int>(done * 100.0 / tot);
+                            int pct = qMin(99, static_cast<int>(done * 100.0 / tot));
                             int prev = sharedMaxProgress->loadAcquire();
                             while (pct > prev && !sharedMaxProgress->testAndSetOrdered(prev, pct))
                                 prev = sharedMaxProgress->loadAcquire();
