@@ -102,6 +102,7 @@ DonutChartWidget::DonutChartWidget(QWidget *parent)
     : QWidget(parent)
 {
     setMinimumSize(300, 220);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
     initPalette();
 }
 
@@ -270,6 +271,7 @@ BarChartWidget::BarChartWidget(QWidget *parent)
     : QWidget(parent)
 {
     setMinimumSize(300, 200);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::MinimumExpanding);
     initPalette();
 }
 
