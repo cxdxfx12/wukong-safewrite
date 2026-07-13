@@ -9,6 +9,7 @@
 #include <QMessageBox>
 #include <QLabel>
 #include <QPixmap>
+#include <QPainter>
 #include <QApplication>
 #include <QDateTime>
 #include <algorithm>
@@ -476,46 +477,60 @@ void ChartDialog::onExportImage()
         return;
 
     QWidget *currentPage = m_tabWidget->currentWidget();
-    if (!currentPage) return;
+    if (!currentPage) {
+        QMessageBox::warning(this, QStringLiteral("导出失败"),
+                             QStringLiteral("无法获取当前页面。"));
+        return;
+    }
 
-    QPixmap pixmap;
     qreal dpr = devicePixelRatioF();
+    QPixmap pixmap;
 
     int currentIndex = m_tabWidget->currentIndex();
 
     if (currentIndex == 3) {
         QScrollArea *scrollArea = currentPage->findChild<QScrollArea*>();
         if (scrollArea && scrollArea->widget()) {
-            QWidget *inner = scrollArea->widget();
-            QSize fullSize = inner->sizeHint();
-            if (!fullSize.isValid() || fullSize.isEmpty())
-                fullSize = inner->size();
+            QWidget *contentWidget = scrollArea->widget();
+            QSize sz = contentWidget->sizeHint();
+            if (sz.width() < scrollArea->viewport()->width())
+                sz.setWidth(scrollArea->viewport()->width());
+            if (sz.height() < contentWidget->height())
+                sz.setHeight(contentWidget->height());
+            if (sz.width() < 100) sz.setWidth(800);
+            if (sz.height() < 100) sz.setHeight(600);
 
-            QSize oldSize = inner->size();
-            bool oldResizable = scrollArea->widgetResizable();
+            QSize originalSize = contentWidget->size();
+            bool wasResizable = scrollArea->widgetResizable();
+
             scrollArea->setWidgetResizable(false);
-            inner->resize(fullSize);
-            inner->layout()->activate();
+            contentWidget->resize(sz);
+            qApp->processEvents();
 
-            pixmap = QPixmap(fullSize);
+            pixmap = QPixmap(sz);
             pixmap.setDevicePixelRatio(dpr);
             pixmap.fill(Qt::white);
-            inner->render(&pixmap);
+            contentWidget->render(&pixmap);
 
-            inner->resize(oldSize);
-            scrollArea->setWidgetResizable(oldResizable);
-        } else {
-            pixmap = QPixmap(currentPage->size());
-            pixmap.setDevicePixelRatio(dpr);
-            currentPage->render(&pixmap);
+            contentWidget->resize(originalSize);
+            scrollArea->setWidgetResizable(wasResizable);
+            qApp->processEvents();
         }
-    } else {
+    }
+
+    if (pixmap.isNull()) {
         pixmap = QPixmap(currentPage->size());
         pixmap.setDevicePixelRatio(dpr);
+        pixmap.fill(Qt::white);
         currentPage->render(&pixmap);
     }
 
-    if (pixmap.save(filePath)) {
+    bool saved = false;
+    if (!pixmap.isNull()) {
+        saved = pixmap.save(filePath);
+    }
+
+    if (saved) {
         QMessageBox::information(this, QStringLiteral("导出成功"),
                                  QStringLiteral("图表已保存到:\n%1").arg(filePath));
     } else {
