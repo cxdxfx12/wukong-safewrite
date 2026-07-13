@@ -475,9 +475,45 @@ void ChartDialog::onExportImage()
     if (filePath.isEmpty())
         return;
 
-    QPixmap pixmap(size());
-    pixmap.setDevicePixelRatio(devicePixelRatioF());
-    render(&pixmap);
+    QWidget *currentPage = m_tabWidget->currentWidget();
+    if (!currentPage) return;
+
+    QPixmap pixmap;
+    qreal dpr = devicePixelRatioF();
+
+    int currentIndex = m_tabWidget->currentIndex();
+
+    if (currentIndex == 3) {
+        QScrollArea *scrollArea = currentPage->findChild<QScrollArea*>();
+        if (scrollArea && scrollArea->widget()) {
+            QWidget *inner = scrollArea->widget();
+            QSize fullSize = inner->sizeHint();
+            if (!fullSize.isValid() || fullSize.isEmpty())
+                fullSize = inner->size();
+
+            QSize oldSize = inner->size();
+            bool oldResizable = scrollArea->widgetResizable();
+            scrollArea->setWidgetResizable(false);
+            inner->resize(fullSize);
+            inner->layout()->activate();
+
+            pixmap = QPixmap(fullSize);
+            pixmap.setDevicePixelRatio(dpr);
+            pixmap.fill(Qt::white);
+            inner->render(&pixmap);
+
+            inner->resize(oldSize);
+            scrollArea->setWidgetResizable(oldResizable);
+        } else {
+            pixmap = QPixmap(currentPage->size());
+            pixmap.setDevicePixelRatio(dpr);
+            currentPage->render(&pixmap);
+        }
+    } else {
+        pixmap = QPixmap(currentPage->size());
+        pixmap.setDevicePixelRatio(dpr);
+        currentPage->render(&pixmap);
+    }
 
     if (pixmap.save(filePath)) {
         QMessageBox::information(this, QStringLiteral("导出成功"),
