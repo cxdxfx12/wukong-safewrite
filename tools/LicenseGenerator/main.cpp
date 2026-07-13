@@ -48,7 +48,7 @@ QString generateLicenseKey(const QString &machineCode, const QString &expireDate
     QByteArray hash = QCryptographicHash::hash(
         (signData + APP_SECRET).toUtf8(), QCryptographicHash::Sha256
     ).toHex().toUpper();
-    QString sign = hash.left(8);
+    QString sign = hash.left(16);
 
     return QStringLiteral("WKF-%1-%2-%3")
         .arg(code, dateCode, sign);

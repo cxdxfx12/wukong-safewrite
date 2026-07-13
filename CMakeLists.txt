@@ -141,6 +141,14 @@ target_include_directories(${PROJECT_NAME}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+# ===================== 授权码生成器 =====================
+if(APPLE)
+    add_executable(LicenseGenerator MACOSX_BUNDLE tools/LicenseGenerator/main.cpp)
+else()
+    add_executable(LicenseGenerator tools/LicenseGenerator/main.cpp)
+endif()
+target_link_libraries(LicenseGenerator PRIVATE Qt6::Core Qt6::Widgets)
+
 # Windows 隐藏控制台 + 设置输出名称
 if(WIN32)
     set_target_properties(${PROJECT_NAME} PROPERTIES

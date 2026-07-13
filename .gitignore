@@ -1,6 +1,7 @@
 # Build directories
 build/*
 !build/WukongFreight.app
+!build/LicenseGenerator.app
 build_test/
 build-*/
 build_macos/
@@ -36,6 +37,7 @@ ui_*.h
 *.app
 # 例外：保留打包好的 .app
 !build/WukongFreight.app
+!build/LicenseGenerator.app
 
 # IDE
 .vs/
