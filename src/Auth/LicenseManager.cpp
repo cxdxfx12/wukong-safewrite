@@ -10,14 +10,43 @@
 #include <QSysInfo>
 #include <QProcess>
 
-// 应用密钥（用于签名验证）
-static const QByteArray APP_SECRET = QByteArrayLiteral("WukongFreight2026@v1.0");
+// 密钥混淆存储（避免明文出现在二进制中）
+static QByteArray getAppSecret()
+{
+    static const unsigned char xorKey[] = {0xA3, 0x5F, 0x71, 0x2C, 0x9E, 0x4B, 0xD8, 0x60};
+    static const unsigned char obfuscated[] = {
+        0xF4, 0x2A, 0x1A, 0x43, 0xF0, 0x2C, 0x9E, 0x12,
+        0xC6, 0x36, 0x16, 0x44, 0xEA, 0x79, 0xE8, 0x52,
+        0x95, 0x1F, 0x07, 0x1D, 0xB0, 0x7B
+    };
+    QByteArray result;
+    int keyLen = sizeof(xorKey);
+    for (int i = 0; i < (int)sizeof(obfuscated); ++i) {
+        result.append(static_cast<char>(obfuscated[i] ^ xorKey[i % keyLen]));
+    }
+    return result;
+}
+
 static const int TRIAL_DAYS = 7;
+
+// 防系统时间回拨：记录并检查最大已见日期
+static QDate getSecureCurrentDate()
+{
+    QDate today = QDate::currentDate();
+    QSettings settings("WukongFreight", "WukongFreight");
+    QDate maxDate = QDate::fromString(settings.value("maxSeenDate").toString(), Qt::ISODate);
+    if (maxDate.isValid() && today < maxDate) {
+        // 系统时间被回拨，使用记录的最大日期
+        return maxDate;
+    }
+    settings.setValue("maxSeenDate", today.toString(Qt::ISODate));
+    return today;
+}
 
 static QString computeTrialSignature(const QString &trialStart, const QString &fingerprint)
 {
-    QByteArray data = (trialStart + "|" + fingerprint + "|TRIAL").toUtf8() + APP_SECRET;
-    return QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex().left(16);
+    QByteArray data = (trialStart + "|" + fingerprint + "|TRIAL").toUtf8() + getAppSecret();
+    return QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex().left(32);
 }
 
 LicenseManager::LicenseManager()
@@ -208,7 +237,7 @@ bool LicenseManager::validateLicense(const QString &licenseKey)
     if (verifyLicenseKey(licenseKey, machineCode)) {
         LicenseInfo info;
         if (parseLicenseKey(licenseKey, info)) {
-            if (info.expireDate < QDate::currentDate()) {
+            if (info.expireDate < getSecureCurrentDate()) {
                 return false;
             }
             info.isValid = true;
@@ -233,9 +262,9 @@ bool LicenseManager::verifyLicenseKey(const QString &licenseKey, const QString &
 
     QString signData = parts.mid(1, 5).join('-');
     QByteArray expectedHash = QCryptographicHash::hash(
-        (signData + APP_SECRET).toUtf8(), QCryptographicHash::Sha256
+        (signData + getAppSecret()).toUtf8(), QCryptographicHash::Sha256
     ).toHex().toUpper();
-    QString expectedSign = expectedHash.left(16);
+    QString expectedSign = expectedHash.left(32);
 
     return parts[6] == expectedSign;
 }
@@ -258,7 +287,7 @@ bool LicenseManager::parseLicenseKey(const QString &licenseKey, LicenseInfo &inf
         return false;
     }
 
-    info.activateDate = QDate::currentDate().toString(QStringLiteral("yyyy-MM-dd"));
+    info.activateDate = getSecureCurrentDate().toString(QStringLiteral("yyyy-MM-dd"));
     return true;
 }
 
@@ -327,7 +356,7 @@ bool LicenseManager::saveLicenseToFile(const QString &licenseKey)
     QJsonObject obj;
     obj[QStringLiteral("licenseKey")] = licenseKey;
     obj[QStringLiteral("fingerprint")] = computeHardwareFingerprint();
-    obj[QStringLiteral("activateDate")] = QDate::currentDate().toString(Qt::ISODate);
+    obj[QStringLiteral("activateDate")] = getSecureCurrentDate().toString(Qt::ISODate);
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly)) return false;
@@ -361,8 +390,23 @@ void LicenseManager::initTrialIfNeeded()
             }
         }
 
+        // 防试用重置：检查系统级备份（QSettings），用户删除license.dat无法重置试用期
+        QSettings settings("WukongFreight", "WukongFreight");
+        QString settingsTrialStart = settings.value("trialStart").toString();
+        if (!settingsTrialStart.isEmpty()) {
+            QDate settingsDate = QDate::fromString(settingsTrialStart, Qt::ISODate);
+            if (settingsDate.isValid()) {
+                if (!validTrial || settingsDate < trialStart) {
+                    // 系统备份有更早的试用起始日期，防止删除文件重置试用
+                    trialStart = settingsDate;
+                    trialStartStr = trialStart.toString(Qt::ISODate);
+                    validTrial = true;
+                }
+            }
+        }
+
         if (!validTrial) {
-            trialStart = QDate::currentDate();
+            trialStart = getSecureCurrentDate();
             trialStartStr = trialStart.toString(Qt::ISODate);
             obj[QStringLiteral("trialStart")] = trialStartStr;
             obj[QStringLiteral("fingerprint")] = currentFingerprint;
@@ -373,6 +417,8 @@ void LicenseManager::initTrialIfNeeded()
             if (out.open(QIODevice::WriteOnly)) {
                 out.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
             }
+            // 同步到系统级备份
+            settings.setValue("trialStart", trialStartStr);
         }
 
         m_license.isTrial = true;
@@ -389,13 +435,13 @@ bool LicenseManager::isAuthorized() const
 bool LicenseManager::isTrialValid() const
 {
     if (!m_license.isTrial) return false;
-    return QDate::currentDate() <= m_license.expireDate;
+    return getSecureCurrentDate() <= m_license.expireDate;
 }
 
 int LicenseManager::trialDaysLeft() const
 {
     if (!m_license.isTrial) return 0;
-    return qMax(0, QDate::currentDate().daysTo(m_license.expireDate));
+    return qMax(0, getSecureCurrentDate().daysTo(m_license.expireDate));
 }
 
 QString LicenseManager::statusText() const
@@ -418,8 +464,9 @@ bool LicenseManager::clearLicense()
     QString path = licenseFilePath();
     QFile file(path);
     if (file.exists()) {
-        return file.remove();
+        file.remove();
     }
+    // 保留系统级试用备份（QSettings），防止注销后重新获得试用期
     return true;
 }
 

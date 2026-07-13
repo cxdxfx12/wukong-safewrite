@@ -194,17 +194,27 @@ void FreightCalculator::calculateBatch(QList<OrderData> &orders, const CustomerR
 
         futures.append(QtConcurrent::run([&, start, end]() {
             for (int idx = start; idx < end; ++idx) {
-                OrderData &order = dataPtr[idx];
-                QString ruleDesc;
-                double freight = calculateFreightDetail(order, rule, ruleDesc);
-                order.freight = freight;
-                order.usedRule = ruleDesc;
-                if (freight <= 0 && order.actualWeight > 0) {
-                    order.isValid = false;
-                    order.errorMessage = QStringLiteral("计算结果为0，可能未匹配到价格规则");
+                try {
+                    OrderData &order = dataPtr[idx];
+                    QString ruleDesc;
+                    double freight = calculateFreightDetail(order, rule, ruleDesc);
+                    order.freight = freight;
+                    order.usedRule = ruleDesc;
+                    if (freight <= 0 && order.actualWeight > 0) {
+                        order.isValid = false;
+                        order.errorMessage = QStringLiteral("计算结果为0，可能未匹配到价格规则");
+                        errorCount.fetchAndAddRelaxed(1);
+                    } else {
+                        order.isValid = true;
+                    }
+                } catch (const std::exception &e) {
+                    dataPtr[idx].isValid = false;
+                    dataPtr[idx].errorMessage = QStringLiteral("计算异常: %1").arg(QString::fromUtf8(e.what()));
                     errorCount.fetchAndAddRelaxed(1);
-                } else {
-                    order.isValid = true;
+                } catch (...) {
+                    dataPtr[idx].isValid = false;
+                    dataPtr[idx].errorMessage = QStringLiteral("计算发生未知错误");
+                    errorCount.fetchAndAddRelaxed(1);
                 }
 
                 int done = progress.fetchAndAddRelaxed(1) + 1;

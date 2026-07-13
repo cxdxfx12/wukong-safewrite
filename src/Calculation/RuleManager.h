@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QList>
 #include <QMap>
+#include <QMutex>
 #include "DataModel/PriceTable.h"
 
 class RuleManager : public QObject {
@@ -70,6 +71,7 @@ signals:
     void rulesChanged();
 
 private:
+    mutable QMutex m_mutex;
     QMap<QString, CustomerRule> m_rules;
     QList<PriceRule> m_defaultPriceTable;
     GlobalRules m_globalRules;

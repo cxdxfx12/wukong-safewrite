@@ -933,7 +933,7 @@ void MainWindow::importFilesAsync(const QStringList &filePaths, bool useExisting
 
                         // ★ 文件内部进度信号 → 实时更新进度条
                         QObject::connect(&importer, &ExcelImporter::progressUpdated, self.data(),
-                            [&](int filePct) {
+                            [&, i, filePaths](int filePct) {
                                 int localDone = static_cast<int>(filePct / 100.0 * static_cast<int>(QFileInfo(filePaths[i]).size() / 200));
                                 int globalDone = sharedProcessedRows->loadAcquire() + localDone;
                                 int tot = sharedTotalRows->loadAcquire();

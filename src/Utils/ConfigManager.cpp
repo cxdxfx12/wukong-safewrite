@@ -1,8 +1,11 @@
 #include "ConfigManager.h"
+#include <QStandardPaths>
+#include <QDir>
+#include <QThread>
 
 ConfigManager::ConfigManager(QObject *parent)
     : QObject(parent)
-    , m_settings("ExpressFreight", "ExpressFreightCalculator")
+    , m_settings("WukongFreight", "WukongFreight")
 {
 }
 
@@ -13,7 +16,8 @@ int ConfigManager::defaultThreadCount() const
 
 void ConfigManager::setDefaultThreadCount(int count)
 {
-    m_settings.setValue("defaultThreadCount", count);
+    m_settings.setValue("defaultThreadCount", qBound(1, count, QThread::idealThreadCount()));
+    m_settings.sync();
 }
 
 int ConfigManager::batchSize() const
@@ -23,7 +27,8 @@ int ConfigManager::batchSize() const
 
 void ConfigManager::setBatchSize(int size)
 {
-    m_settings.setValue("batchSize", size);
+    m_settings.setValue("batchSize", qMax(100, size));
+    m_settings.sync();
 }
 
 QString ConfigManager::lastImportPath() const
@@ -34,6 +39,7 @@ QString ConfigManager::lastImportPath() const
 void ConfigManager::setLastImportPath(const QString &path)
 {
     m_settings.setValue("lastImportPath", path);
+    m_settings.sync();
 }
 
 QString ConfigManager::lastExportPath() const
@@ -44,16 +50,23 @@ QString ConfigManager::lastExportPath() const
 void ConfigManager::setLastExportPath(const QString &path)
 {
     m_settings.setValue("lastExportPath", path);
+    m_settings.sync();
 }
 
 QString ConfigManager::rulesFilePath() const
 {
-    return m_settings.value("rulesFilePath", "rules.json").toString();
+    QString defaultPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (defaultPath.isEmpty()) {
+        defaultPath = QDir::homePath() + QStringLiteral("/.WukongFreight");
+    }
+    defaultPath += QStringLiteral("/rules.json");
+    return m_settings.value("rulesFilePath", defaultPath).toString();
 }
 
 void ConfigManager::setRulesFilePath(const QString &path)
 {
     m_settings.setValue("rulesFilePath", path);
+    m_settings.sync();
 }
 
 void ConfigManager::sync()

@@ -590,6 +590,8 @@ GlobalRules globalRulesFromJson(const QJsonObject &obj)
 
 bool RuleManager::saveToFile(const QString &filePath)
 {
+    QMutexLocker locker(&m_mutex);
+
     QJsonObject root;
 
     // 保存默认报价表
@@ -623,17 +625,46 @@ bool RuleManager::saveToFile(const QString &filePath)
     root[QStringLiteral("courier")] = m_currentCourier.isEmpty() ? QStringLiteral("申通") : m_currentCourier;
 
     QJsonDocument doc(root);
-    QFile file(filePath);
-    if (!file.open(QIODevice::WriteOnly)) {
+
+    // 原子写入：先写临时文件，再重命名替换原文件
+    QString tempPath = filePath + QStringLiteral(".tmp");
+    QFile tempFile(tempPath);
+    if (!tempFile.open(QIODevice::WriteOnly)) {
         return false;
     }
-    file.write(doc.toJson(QJsonDocument::Indented));
-    file.close();
+    qint64 written = tempFile.write(doc.toJson(QJsonDocument::Indented));
+    if (written < 0) {
+        tempFile.close();
+        tempFile.remove();
+        return false;
+    }
+    tempFile.flush();
+    tempFile.close();
+
+    // 备份旧文件
+    QFile oldFile(filePath);
+    if (oldFile.exists()) {
+        QString backupPath = filePath + QStringLiteral(".bak");
+        QFile::remove(backupPath);
+        oldFile.rename(backupPath);
+    }
+
+    // 原子重命名
+    if (!QFile::rename(tempPath, filePath)) {
+        // 重命名失败，尝试恢复备份
+        QFile::rename(filePath + QStringLiteral(".bak"), filePath);
+        return false;
+    }
+
+    // 删除备份
+    QFile::remove(filePath + QStringLiteral(".bak"));
     return true;
 }
 
 bool RuleManager::loadFromFile(const QString &filePath)
 {
+    QMutexLocker locker(&m_mutex);
+
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly)) {
         return false;
@@ -644,6 +675,10 @@ bool RuleManager::loadFromFile(const QString &filePath)
     file.close();
 
     if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+        // 备份损坏的文件，便于后续恢复
+        QString backupPath = filePath + QStringLiteral(".corrupt");
+        QFile::remove(backupPath);
+        QFile::rename(filePath, backupPath);
         return false;
     }
 

@@ -14,7 +14,22 @@
 #include <QTimer>
 #include <QRegularExpression>
 
-static const QByteArray APP_SECRET = QByteArrayLiteral("WukongFreight2026@v1.0");
+// 密钥混淆存储（与LicenseManager保持一致）
+static QByteArray getAppSecret()
+{
+    static const unsigned char xorKey[] = {0xA3, 0x5F, 0x71, 0x2C, 0x9E, 0x4B, 0xD8, 0x60};
+    static const unsigned char obfuscated[] = {
+        0xF4, 0x2A, 0x1A, 0x43, 0xF0, 0x2C, 0x9E, 0x12,
+        0xC6, 0x36, 0x16, 0x44, 0xEA, 0x79, 0xE8, 0x52,
+        0x95, 0x1F, 0x07, 0x1D, 0xB0, 0x7B
+    };
+    QByteArray result;
+    int keyLen = sizeof(xorKey);
+    for (int i = 0; i < (int)sizeof(obfuscated); ++i) {
+        result.append(static_cast<char>(obfuscated[i] ^ xorKey[i % keyLen]));
+    }
+    return result;
+}
 
 QString formatMachineCode(const QString &input)
 {
@@ -46,9 +61,9 @@ QString generateLicenseKey(const QString &machineCode, const QString &expireDate
 
     QString signData = QStringLiteral("%1-%2").arg(code, dateCode);
     QByteArray hash = QCryptographicHash::hash(
-        (signData + APP_SECRET).toUtf8(), QCryptographicHash::Sha256
+        (signData + getAppSecret()).toUtf8(), QCryptographicHash::Sha256
     ).toHex().toUpper();
-    QString sign = hash.left(16);
+    QString sign = hash.left(32);
 
     return QStringLiteral("WKF-%1-%2-%3")
         .arg(code, dateCode, sign);
